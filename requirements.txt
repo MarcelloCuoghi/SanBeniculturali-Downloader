@@ -1,4 +1,4 @@
-scrapy
+Scrapy
 requests
-pillow
-protego
+Pillow
+Protego
