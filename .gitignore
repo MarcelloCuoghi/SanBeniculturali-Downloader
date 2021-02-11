@@ -132,6 +132,7 @@ dmypy.json
 *.pyproj
 .vs
 SanBeniculturali-Downloader.sln
+.user
 
 # misc
 schemas
