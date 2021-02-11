@@ -6,10 +6,12 @@
 
 # useful for handling different item types with a single interface
 from itemadapter import ItemAdapter
-from items import ImageItem
+from data.items import ImageItem
 from scrapy.pipelines.images import ImagesPipeline
 from scrapy.http import Request
 import re
+from data.database import Database
+
 
 class MyImagesPipeline(ImagesPipeline):
     
@@ -32,4 +34,20 @@ class MyImagesPipeline(ImagesPipeline):
             yield key, image, buf
 
     def change_filename(self, key, response):
-        return "full/%s.jpg" % response.meta['image_name'][0]
+        return "%s.jpg" % response.meta['image_name'][0]
+
+
+#class ItemCollectorPipeline(object):
+#    """ Manage the url items"""
+
+#    def __init__(self):
+#        self.ids_seen = set()
+#        self.db = Database()
+#        self.urls = {}
+
+#    def process_item(self, item, spider):
+#        urls = list(filter(None, item['url'].split('/')))
+#        previous_id = None
+#        self.db.urls_to_add.put({urls[0]: ""})
+#        for i in range(1, len(urls)):
+#            self.db.urls_to_add.put({urls[i]: urls[i - 1]})

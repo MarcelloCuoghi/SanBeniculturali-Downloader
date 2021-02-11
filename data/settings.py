@@ -9,12 +9,12 @@
 
 BOT_NAME = 'SanBeniculturaliDownloader'
 
-SPIDER_MODULES = ['spiders']
+SPIDER_MODULES = ['data.spiders']
 NEWSPIDER_MODULE = 'spiders'
-
+LOG_LEVEL = 'ERROR'
 
 # Crawl responsibly by identifying yourself (and your website) on the user-agent
-#USER_AGENT = 'scrapyGenealogia (+http://www.yourdomain.com)'
+USER_AGENT = 'scrapy'
 
 # Obey robots.txt rules
 ROBOTSTXT_OBEY = True
@@ -31,7 +31,7 @@ ROBOTSTXT_OBEY = True
 #CONCURRENT_REQUESTS_PER_IP = 16
 
 # Disable cookies (enabled by default)
-#COOKIES_ENABLED = False
+COOKIES_ENABLED = False
 
 # Disable Telnet Console (enabled by default)
 #TELNETCONSOLE_ENABLED = False
@@ -62,9 +62,11 @@ ROBOTSTXT_OBEY = True
 
 # Configure item pipelines
 # See https://docs.scrapy.org/en/latest/topics/item-pipeline.html
-ITEM_PIPELINES = {'pipelines.MyImagesPipeline': 1}
+ITEM_PIPELINES = {'data.pipelines.MyImagesPipeline': 1,
+                  #'data.pipelines.ItemCollectorPipeline': 100
+                  }
 # Where to store images
-IMAGES_STORE = "F:\\images"
+IMAGES_STORE = ""
 
 # Enable and configure the AutoThrottle extension (disabled by default)
 # See https://docs.scrapy.org/en/latest/topics/autothrottle.html
