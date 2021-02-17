@@ -33,18 +33,3 @@ class MyImagesPipeline(ImagesPipeline):
             if self.CONVERTED_ORIGINAL.match(key):
                 key = change_filename(response)
             yield key, image, buf
-
-# class ItemCollectorPipeline(object):
-#    """ Manage the url items"""
-
-#    def __init__(self):
-#        self.ids_seen = set()
-#        self.db = Database()
-#        self.urls = {}
-
-#    def process_item(self, item, spider):
-#        urls = list(filter(None, item['url'].split('/')))
-#        previous_id = None
-#        self.db.urls_to_add.put({urls[0]: ""})
-#        for i in range(1, len(urls)):
-#            self.db.urls_to_add.put({urls[i]: urls[i - 1]})

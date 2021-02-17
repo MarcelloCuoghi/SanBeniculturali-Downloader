@@ -72,8 +72,8 @@ def open_folder():
 def about():
     messagebox.showinfo(title="About",
                         message="""SanBeniculturali Downloader
-                                Creato da Marcello Cuoghi
-                                https://github.com/MarcelloCuoghi""")
+Creato da Marcello Cuoghi
+https://github.com/MarcelloCuoghi""")
 
 
 class MainWindow:
@@ -249,9 +249,8 @@ class MainWindow:
             selected = self.url_list[cs[0]]
             response = messagebox.askquestion(title="Download",
                                               message="""Elemento selezionato: {}
-                                              Sei sicuro di volerlo scaricare? La dimensione del download potrebbe 
-                                              essere eccessiva""".format(
-                                                  selected))
+Sei sicuro di volerlo scaricare? 
+La dimensione del download potrebbe essere eccessiva""".format(selected))
             if response == 'yes':
                 self.start_download(selected)
 

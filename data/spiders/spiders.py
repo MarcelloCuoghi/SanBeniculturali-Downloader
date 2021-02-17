@@ -1,5 +1,5 @@
 import scrapy
-from data.items import ImageItem, UrlItem
+from data.items import ImageItem
 
 
 class SanBeniculturaliDownloader(scrapy.Spider):
@@ -21,23 +21,3 @@ class SanBeniculturaliDownloader(scrapy.Spider):
             next_page = response.css('div.next-and-last a::attr(href)').get()
             if next_page is not None:
                 yield response.follow(next_page, callback=self.parse)
-
-
-class SanBeniculturaliURL(scrapy.Spider):
-    name = "SanBeniculturaliURL"
-
-    def parse(self, response, **kwargs):
-        # Get the elements in the central page
-        table = response.xpath('//*[@id="gsThumbMatrix"]//a')
-        for elem in table:
-            yield UrlItem(url=elem.attrib['href'], name=elem.attrib['href'].split('/')[-2])
-
-        # Check if there are multiple pages
-        next_page = response.css('div.next-and-last a::attr(href)').get()
-        if next_page is not None:
-            yield response.follow(next_page, callback=self.parse)
-
-        # Iterate over the elements in the central page
-        table = response.xpath('//*[@id="gsThumbMatrix"]//a')
-        for elem in table:
-            yield response.follow(elem.attrib['href'], callback=self.parse)

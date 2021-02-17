@@ -11,7 +11,3 @@ class ImageItem(scrapy.Item):
     images = scrapy.Field()
     image_name = scrapy.Field()
 
-
-class UrlItem(scrapy.Item):
-    url = scrapy.Field()
-    name = scrapy.Field()
