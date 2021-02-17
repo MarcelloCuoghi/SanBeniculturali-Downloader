@@ -45,12 +45,10 @@ class Database:
                 self._thread.lock = False
                 return v
 
-    def get_callbak(self):
+    def get_callback(self):
         self.wait = False
 
 
-    
-    
 class MyThread(Thread):
     url_table_query = """CREATE TABLE IF NOT EXISTS URL (
                                     id integer PRIMARY KEY,
@@ -83,7 +81,7 @@ class MyThread(Thread):
         self._parent = parent
 
         # check if database exist, open or create it
-        self._db_file = "C:\\Users\\cuoghmar\\Desktop\\images\\data.db"
+        self._db_file = ".data.db"
 
         super(MyThread, self).__init__()
 
@@ -111,7 +109,7 @@ class MyThread(Thread):
             if self.lock and not self._parent.appoggio.empty() and self._parent.wait:
                 k = self._parent.appoggio.get()
                 self._get_from_table(k)
-                self._parent.get_callbak()
+                self._parent.get_callback()
 
     def _execute_query(self, sql_query, data=None):
         """ execute the given query """
@@ -206,8 +204,8 @@ class MyThread(Thread):
             v = self._get_full_url(k)
             v2 = list(self._get_url_row(k))
             if v2:
-                retval = [v2[0], v, v2[2]]
-                self._parent.appoggio.put(retval)
+                ret_val = [v2[0], v, v2[2]]
+                self._parent.appoggio.put(ret_val)
             else:
                 self._parent.appoggio.put("")
         elif self.tmp_tabella == 'url_list':

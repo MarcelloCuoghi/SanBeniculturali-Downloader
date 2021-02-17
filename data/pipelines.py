@@ -5,16 +5,17 @@
 
 
 # useful for handling different item types with a single interface
-from itemadapter import ItemAdapter
-from data.items import ImageItem
+
 from scrapy.pipelines.images import ImagesPipeline
 from scrapy.http import Request
 import re
-from data.database import Database
+
+
+def change_filename(response):
+    return "%s.jpg" % response.meta['image_name'][0]
 
 
 class MyImagesPipeline(ImagesPipeline):
-    
     CONVERTED_ORIGINAL = re.compile('^full/[0-9,a-f]+.jpg$')
 
     # name information coming from the spider, in each item
@@ -26,18 +27,14 @@ class MyImagesPipeline(ImagesPipeline):
                 for x in item.get('image_urls', [])]
 
     # this is where the image is extracted from the HTTP response
-    def get_images(self, response, request, info):
+    def get_images(self, response, request, info, **kwargs):
         print("get_images")
         for key, image, buf, in super(MyImagesPipeline, self).get_images(response, request, info):
             if self.CONVERTED_ORIGINAL.match(key):
-                key = self.change_filename(key, response)
+                key = change_filename(response)
             yield key, image, buf
 
-    def change_filename(self, key, response):
-        return "%s.jpg" % response.meta['image_name'][0]
-
-
-#class ItemCollectorPipeline(object):
+# class ItemCollectorPipeline(object):
 #    """ Manage the url items"""
 
 #    def __init__(self):
