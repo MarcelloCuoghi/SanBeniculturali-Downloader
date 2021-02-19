@@ -1,15 +1,20 @@
+"""Spiders used to scraping a website"""
 import scrapy
 from data.items import ImageItem, UrlItem
 
 
 class SanBeniculturaliDownloader(scrapy.Spider):
+    """Spider used to download the images from an url"""
     name = "SanBeniculturaliDownloader"
 
     def parse(self, response, **kwargs):
         # If is an image page, save it
         if 'jpg' in response.url.split('.'):
             yield ImageItem(image_urls=[response.xpath('//*[@id="zoomAntenati1"]').attrib['href']],
-                            image_name=[response.url.replace('.jpg', '').replace(':', '').replace('.html', '')[41:]])
+                            image_name=[response.url.replace('.jpg', '')
+                            .replace(':', '')
+                            .replace('.html', '')[41:]]
+                            )
         else:
             # Iterate over the elements in the central page
             table = response.xpath('//*[@id="gsThumbMatrix"]//a')

@@ -2,3 +2,5 @@ Scrapy
 requests
 Pillow
 Protego
+lxml
+twisted

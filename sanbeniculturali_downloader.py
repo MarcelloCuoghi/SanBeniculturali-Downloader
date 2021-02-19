@@ -1,7 +1,9 @@
+"""Main starting script"""
 from gui.main_window import MainWindow
 
 
 def main():
+    """Start the application"""
     MainWindow()
 
 
