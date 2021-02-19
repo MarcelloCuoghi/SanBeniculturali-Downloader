@@ -18,22 +18,21 @@ class MyImagesPipeline(ImagesPipeline):
     """Pipeline used by scrapy do download the image"""
     CONVERTED_ORIGINAL = re.compile('^full/[0-9,a-f]+.jpg$')
 
-    def file_path(self, request, response=None, info=None, *, item=None):
-        """Name file as in the URL"""
-        return "%s.jpg" % response.meta['image_name'][0]
-
-    # name information coming from the spider, in each item
-    # add this information to Requests() for individual images downloads
-    # through "meta" dictionary
     def get_media_requests(self, item, info):
+        """
+         name information coming from the spider, in each item
+        add this information to Requests() for individual images downloads
+        through "meta" dictionary
+        """
         return [Request(x, meta={'image_name': item["image_name"]})
                 for x in item.get('image_urls', [])]
 
-    def get_images(self, response, request, info, **kwargs):
+    def get_images(self, response, request, info, *, item=None):
         for key, image, buf, in super().get_images(response, request, info):
             if self.CONVERTED_ORIGINAL.match(key):
                 key = change_filename(response)
             yield key, image, buf
+
 
 # class ItemCollectorPipeline(object):
 #    """ Manage the url items"""

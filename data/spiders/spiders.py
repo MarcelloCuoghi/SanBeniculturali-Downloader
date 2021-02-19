@@ -1,6 +1,6 @@
 """Spiders used to scraping a website"""
 import scrapy
-from data.items import ImageItem, UrlItem
+from data.items import ImageItem
 
 
 class SanBeniculturaliDownloader(scrapy.Spider):
