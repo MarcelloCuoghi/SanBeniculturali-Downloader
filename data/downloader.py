@@ -86,7 +86,6 @@ class ImageDownloader(QtCore.QThread):
     def __init__(self, start_url):
         """Constructor"""
         QtCore.QThread.__init__(self)
-        print("Created downloader for {}".format(start_url))
         self.start_url = start_url
         self.run = False
         self.get_urls = Thread(target=get_url_list_download, args=(self.start_url, self.url_list, lambda: self.run))

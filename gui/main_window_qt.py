@@ -2,20 +2,13 @@
 import os
 import platform
 import subprocess
-import time
 from threading import Thread
-from multiprocessing import Process
 import webbrowser
 
 from PyQt5.QtCore import Qt
-import requests
-from scrapy.utils.project import get_project_settings
-from scrapy.crawler import CrawlerRunner
-from twisted.internet import reactor
-from data.spiders.spiders import SanBeniculturaliDownloader
-from .waitingspinnerwidget import QtWaitingSpinner
 from PyQt5 import QtWidgets, uic, QtCore
 from data.downloader import BASE_URL, get_url_list, ImageDownloader
+from .waitingspinnerwidget import QtWaitingSpinner
 
 
 def update_list_background(caller):
@@ -32,23 +25,6 @@ def update_list_background(caller):
             caller.qt_url_list.addItem(i.split('/')[-2])
     caller.qt_url_list.setCurrentRow(0)
     caller.spinner.stop()
-
-
-def scrapy_downloader(url):
-    """download the request registry from the given url"""
-    settings_file_path = 'data.settings'  # The path seen from root, ie. from main.py
-    os.environ.setdefault('SCRAPY_SETTINGS_MODULE', settings_file_path)
-
-    settings = get_project_settings()
-    path = os.getcwd()
-    path += "\\Download"
-    if not os.path.exists(path):
-        os.makedirs(path)
-    settings['IMAGES_STORE'] = path
-    runner = CrawlerRunner(settings)
-    crawler = runner.crawl(SanBeniculturaliDownloader, start_urls=[BASE_URL + url, ])
-    crawler.addBoth(lambda _: reactor.stop())
-    reactor.run()
 
 
 def open_folder():
@@ -229,7 +205,10 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def download(self):
         """Request for confirmation about downloading current item"""
         if self.selected_item:
-            item_name = "..." + self.selected_item[len(self.selected_item)-35:-1]
+            if len(self.selected_item) - 35 < 0:
+                item_name = "..." + self.selected_item[0:-1]
+            else:
+                item_name = "..." + self.selected_item[len(self.selected_item)-35:-1]
             msg_box = QtWidgets.QMessageBox()
 
             msg_box.setTextFormat(QtCore.Qt.RichText)
@@ -276,8 +255,8 @@ class MainWindowQt(QtWidgets.QMainWindow):
         info_msg = msg.split('|')[0]
         url = msg.split('|')[1]
         msg_box = QtWidgets.QMessageBox()
-        msg_box.setWindowTitle("Download complete!")
-        msg_box.setText(info_msg)
+        msg_box.setWindowTitle("Download complete")
+        msg_box.setText(info_msg + "\n{}".format(url))
         msg_box.exec()
 
         for i in range(len(self.downloading_list)):

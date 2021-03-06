@@ -1,5 +1,4 @@
-Scrapy
-requests
+requests~=2.25.1
 Pillow
 Protego
 lxml
