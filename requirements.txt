@@ -4,3 +4,5 @@ Pillow
 Protego
 lxml
 twisted
+pyqt
+itemadapter
