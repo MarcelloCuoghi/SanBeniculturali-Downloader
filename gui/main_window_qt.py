@@ -2,12 +2,12 @@
 import os
 import platform
 import subprocess
+import time
 from threading import Thread
 from multiprocessing import Process
 import webbrowser
 
 from PyQt5.QtCore import Qt
-from lxml import html
 import requests
 from scrapy.utils.project import get_project_settings
 from scrapy.crawler import CrawlerRunner
@@ -15,9 +15,7 @@ from twisted.internet import reactor
 from data.spiders.spiders import SanBeniculturaliDownloader
 from .waitingspinnerwidget import QtWaitingSpinner
 from PyQt5 import QtWidgets, uic, QtCore
-
-
-BASE_URL = 'http://dl.antenati.san.beniculturali.it'
+from data.downloader import BASE_URL, get_url_list, ImageDownloader
 
 
 def update_list_background(caller):
@@ -34,21 +32,6 @@ def update_list_background(caller):
             caller.qt_url_list.addItem(i.split('/')[-2])
     caller.qt_url_list.setCurrentRow(0)
     caller.spinner.stop()
-
-
-def get_url_list(url, urls):
-    """get all the urls in the page"""
-    req = requests.get(BASE_URL + url)
-    tree = html.fromstring(req.content)
-
-    table = tree.xpath('//*[@id="gsThumbMatrix"]//a')
-    for elem in table:
-        if elem.attrib['href'] not in urls:
-            urls.append(elem.attrib['href'])
-
-    next_page = tree.cssselect('div.next-and-last')
-    if next_page and len(next_page) and len(next_page[0]):
-        get_url_list(tree.cssselect('div.next-and-last')[0][0].get('href'), urls)
 
 
 def scrapy_downloader(url):
@@ -104,6 +87,7 @@ class MainWindowQt(QtWidgets.QMainWindow):
     current_url = "/gallery/"
     selected_item_download = ""
     selected_item = ""
+    lock = False
 
     def __init__(self):
         """Constructor"""
@@ -220,6 +204,8 @@ class MainWindowQt(QtWidgets.QMainWindow):
         if not item:
             item = self.qt_url_list.currentItem()
         self.selected_item = ""
+        if not item:
+            return
         for i in range(len(self.url_list)):
             if 'jpg' in item.text() and self.url_list[i].split("/")[-1] == item.text():
                 self.selected_item = self.url_list[i]
@@ -231,14 +217,13 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def change_selection_download(self, item=None):
         """Find the given item"""
         if not item:
-            item = self.qt_url_list.currentItem()
+            item = self.qt_downloading_list.currentItem()
+        if not item:
+            return
         self.selected_item_download = ""
-        for i in range(len(self.url_list)):
-            if 'jpg' in item.text() and self.url_list[i].split("/")[-1] == item.text():
-                self.selected_item_download = self.url_list[i]
-                return
-            elif self.url_list[i].split("/")[-2] == item.text():
-                self.selected_item_download = self.url_list[i]
+        for i in range(len(self.downloading_list)):
+            if self.downloading_list[i].start_url == item.text():
+                self.selected_item_download = self.downloading_list[i]
                 return
 
     def download(self):
@@ -261,10 +246,13 @@ class MainWindowQt(QtWidgets.QMainWindow):
 
     def start_download(self):
         """Download current selected items"""
-        self.downloading_list.append(self.selected_item)
+        tmp = ImageDownloader(self.selected_item)
+        tmp.complete.connect(self.end_download)
         self.qt_downloading_list.addItem(self.selected_item)
-        downloader = Process(target=scrapy_downloader, args=(self.selected_item,))
-        downloader.start()
+        self.downloading_list.append(tmp)
+        tmp.start()
+        # downloader = Process(target=scrapy_downloader, args=(self.selected_item,))
+        # downloader.start()
 
     def closeEvent(self, event):
         """Closing event, request if close or not the application"""
@@ -272,11 +260,28 @@ class MainWindowQt(QtWidgets.QMainWindow):
                                    QtWidgets.QMessageBox.Yes | QtWidgets.QMessageBox.No, QtWidgets.QMessageBox.No)
 
         if reply == QtWidgets.QMessageBox.Yes:
+            for elem in self.downloading_list:
+                elem.stop()
             event.accept()
         else:
             event.ignore()
 
     def stop(self):
         """Stop the selected downloading"""
-        if not self.selected_item_download:
-            return
+        if self.selected_item_download:
+            self.selected_item_download.stop()
+
+    def end_download(self, msg):
+        """Notify end of the download"""
+        info_msg = msg.split('|')[0]
+        url = msg.split('|')[1]
+        msg_box = QtWidgets.QMessageBox()
+        msg_box.setWindowTitle("Download complete!")
+        msg_box.setText(info_msg)
+        msg_box.exec()
+
+        for i in range(len(self.downloading_list)):
+            if self.downloading_list[i].start_url == url:
+                self.downloading_list.remove(self.downloading_list[i])
+                self.qt_downloading_list.takeItem(i)
+                break
