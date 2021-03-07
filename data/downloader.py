@@ -104,9 +104,9 @@ class ImageDownloader(QtCore.QThread):
             if not self.url_list.empty():
                 if len(self.processes) < 5:
                     image = self.url_list.get()
-                    p = Process(target=save_image, args=(image,))
-                    p.start()
-                    self.processes.append(p)
+                    t = Thread(target=save_image, args=(image,))
+                    t.start()
+                    self.processes.append(t)
                     self.tot_download += 1
                 else:
                     for _ in range(len(self.processes)):
@@ -133,8 +133,8 @@ class ImageDownloader(QtCore.QThread):
         for folder in self.start_url[3:].split('/')[:-1]:
             path += folder + "\\"
         size = get_size(path)
-        msg = "End in {} download {} images, {:.5g} Mbytes".format(
-            datetime.now()-self.start_time, self.tot_download, size/1024/1024)
+        msg = "Downloaded {} images of {:.2f} Mbytes in {} seconds".format(
+            self.tot_download, size/1024/1024, str(datetime.now()-self.start_time).split('.')[0])
 
         self.complete.emit(msg + '|' + self.start_url)
 

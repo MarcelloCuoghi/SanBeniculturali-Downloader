@@ -75,6 +75,11 @@ class MainWindowQt(QtWidgets.QMainWindow):
         self.qt_url_list.itemDoubleClicked.connect(self.click_on_element)
         self.qt_url_list.itemSelectionChanged.connect(self.change_selection)
 
+        self.qt_downloading_list = self.findChild(QtWidgets.QListWidget, 'downloadingList')
+        self.qt_downloading_list.itemSelectionChanged.connect(self.change_selection_download)
+        self.qt_stop_btn = self.findChild(QtWidgets.QPushButton, 'stopButton')
+        self.qt_stop_btn.clicked.connect(self.stop)
+
         self.qt_back_btn = self.findChild(QtWidgets.QPushButton, 'BackButton')
         self.qt_back_btn.clicked.connect(self.back_click)
 
@@ -114,10 +119,15 @@ class MainWindowQt(QtWidgets.QMainWindow):
         self.spinner.setInnerRadius(10)
         self.spinner.setRevolutionsPerSecond(1)
 
-        self.qt_downloading_list = self.findChild(QtWidgets.QListWidget, 'downloadingList')
-        self.qt_downloading_list.itemSelectionChanged.connect(self.change_selection_download)
-        self.qt_stop_btn = self.findChild(QtWidgets.QPushButton, 'stopButton')
-        self.qt_stop_btn.clicked.connect(self.stop)
+        self.spinner_down = QtWaitingSpinner(self.qt_downloading_list, disableParentWhenSpinning=True)
+        self.spinner_down.setRoundness(70.0)
+        self.spinner_down.setMinimumTrailOpacity(15.0)
+        self.spinner_down.setTrailFadePercentage(70.0)
+        self.spinner_down.setNumberOfLines(12)
+        self.spinner_down.setLineLength(10)
+        self.spinner_down.setLineWidth(5)
+        self.spinner_down.setInnerRadius(10)
+        self.spinner_down.setRevolutionsPerSecond(1)
 
         self.update_list()
 
@@ -247,6 +257,7 @@ class MainWindowQt(QtWidgets.QMainWindow):
 
     def stop(self):
         """Stop the selected downloading"""
+        self.spinner_down.start()
         if self.selected_item_download:
             self.selected_item_download.stop()
 
@@ -264,3 +275,5 @@ class MainWindowQt(QtWidgets.QMainWindow):
                 self.downloading_list.remove(self.downloading_list[i])
                 self.qt_downloading_list.takeItem(i)
                 break
+
+        self.spinner_down.stop()
