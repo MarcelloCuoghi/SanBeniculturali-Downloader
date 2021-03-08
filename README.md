@@ -12,15 +12,18 @@ At the moment there is no verification of the available space and the required s
 
 I strongly advise against downloading a state archive completely, but rather downloading only the city concerned or, even better, the single year or single category of registers (eg only the registers relating to the indices).
 
-## Requirements
-
-Install Python 3.7
-
-`pip install -r requirements.txt`
-
 ## How to Run
+### Windows
 
-`python sanbeniculturali_downloader.py`
+TODO
+
+### Unix
+
+Depending on your operating system, some steps may be differents, here I show the step for working with Ubuntu.
+
+1) Install Python 3 `sudo apt update && sudo apt install python3 && sudo apt install python3-pip`
+2) Install requirements `pip3 install -r requirements.txt`
+3) Start the application `python3 sanbeniculturali_downloader.py`
 
 # ITA
 

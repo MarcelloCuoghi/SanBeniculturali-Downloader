@@ -54,13 +54,21 @@ def scrapy_downloader(url):
 def open_folder():
     """Open download folder"""
     path = os.getcwd()
-    path += "\\Download"
-    if not os.path.exists(path):
-        os.makedirs(path)
     if platform.system() == "Windows":
+        path += "\\Download"
+        if not os.path.exists(path):
+            os.makedirs(path)
         os.startfile(path)
-    else:
+    elif platform.system() == "Linux":
+        path += "/Download"
+        if not os.path.exists(path):
+            os.makedirs(path)
         subprocess.Popen(["xdg-open", path])
+    elif platform.system() == 'Darwin':
+        path += "/Download"
+        if not os.path.exists(path):
+            os.makedirs(path)
+        subprocess.call(('open', path))
 
 
 def about():
@@ -92,8 +100,13 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def __init__(self):
         """Constructor"""
         super().__init__()  # Call the inherited classes __init__ method
-        uic.loadUi('.\\gui\\resources\\mainwindow.ui', self)  # Load the .ui file
         self.show()  # Show the GUI
+        if platform.system() == 'Windows':
+            uic.loadUi('.\\gui\\resources\\mainwindow.ui', self)
+        elif platform.system() == 'Linux':
+            uic.loadUi('./gui/resources/mainwindow.ui', self)
+        elif platform.system() == 'Darwin':
+            uic.loadUi('./gui/resources/mainwindow.ui', self)
 
         self.qt_url_list = self.findChild(QtWidgets.QListWidget, 'UrlList')
         self.qt_url_list.itemDoubleClicked.connect(self.click_on_element)
