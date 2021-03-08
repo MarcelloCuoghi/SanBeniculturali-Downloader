@@ -15,15 +15,20 @@ I strongly advise against downloading a state archive completely, but rather dow
 ## How to Run
 ### Windows
 
-TODO
+From [release page](https://github.com/MarcelloCuoghi/SanBeniculturali-Downloader/releases/latest) , extract the ZIP file and launch the file "sanbeniculturali_downloader.exe"
 
 ### Unix
 
 Depending on your operating system, some steps may be differents, here I show the step for working with Ubuntu.
+Open line command:
 
 1) Install Python 3 `sudo apt update && sudo apt install python3 && sudo apt install python3-pip`
 2) Install requirements `pip3 install -r requirements.txt`
 3) Start the application `python3 sanbeniculturali_downloader.py`
+
+### MacOs
+
+I don't own a macos system, so I could not try, but I think it's working similar to unix.
 
 # ITA
 
@@ -39,13 +44,20 @@ Al momento non è presente nessun controllo o verifica a priori dello spazio dis
 
 Sconsiglio vivamente di scaricare completamente un archivio di stato, ma piuttosto di scaricare la sola città interessata o, ancora meglio, il singolo anno o la singola categoria di registri (per es i soli registri relativi agli indici).
 
-## Requisiti
+## Come avviarlo
+### Windows
 
-Installa Python 3.7
+Dalla [pagina release](https://github.com/MarcelloCuoghi/SanBeniculturali-Downloader/releases/latest), scarica ed estrai il file ZIP, avvia poi il file "sanbeniculturali_downloader.exe"
 
-`pip install -r requirements.txt`
+### Unix
 
+A seconda del sistema operativo, alcuni passaggi potrebbero essere differenti (ma google aiuta), qui sono mostrati quelli necessari con Ubuntu.
+Apri la linea di comando:
 
-## Utilizzo
+1) Installa Python 3 `sudo apt update && sudo apt install python3 && sudo apt install python3-pip`
+2) Installa i requisiti `pip3 install -r requirements.txt`
+3) Avvia l'applicazione `python3 sanbeniculturali_downloader.py`
 
-`python sanbeniculturali_downloader.py`
+### MacOs
+
+Non possiedo un sistema MacOs, e quindi non riesco a provare, ma penso funzioni in modo simile a unix.
