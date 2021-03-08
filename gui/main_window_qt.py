@@ -6,7 +6,7 @@ from threading import Thread
 import webbrowser
 
 from PyQt5.QtCore import Qt
-from PyQt5 import QtWidgets, uic, QtCore
+from PyQt5 import QtWidgets, uic, QtCore, QtTest
 from data.downloader import BASE_URL, get_url_list, ImageDownloader
 from .waitingspinnerwidget import QtWaitingSpinner
 
@@ -15,28 +15,27 @@ def update_list_background(caller):
     """Start the download of urls in background"""
     caller.url_list = []
     get_url_list(caller.current_url, caller.url_list)
-
-    caller.qt_current_position.setText(caller.current_url)
-    caller.qt_url_list.clear()
-    for i in caller.url_list:
-        if 'jpg' in i:
-            caller.qt_url_list.addItem(i.split('/')[-1])
-        else:
-            caller.qt_url_list.addItem(i.split('/')[-2])
-    caller.qt_url_list.setCurrentRow(0)
-    caller.spinner.stop()
+    caller.end_loading = True
 
 
 def open_folder():
     """Open download folder"""
     path = os.getcwd()
-    path += "\\Download"
-    if not os.path.exists(path):
-        os.makedirs(path)
     if platform.system() == "Windows":
+        path += "\\Download"
+        if not os.path.exists(path):
+            os.makedirs(path)
         os.startfile(path)
-    else:
+    elif platform.system() == "Linux":
+        path += "/Download"
+        if not os.path.exists(path):
+            os.makedirs(path)
         subprocess.Popen(["xdg-open", path])
+    elif platform.system() == 'Darwin':
+        path += "/Download"
+        if not os.path.exists(path):
+            os.makedirs(path)
+        subprocess.call(('open', path))
 
 
 def about():
@@ -64,12 +63,18 @@ class MainWindowQt(QtWidgets.QMainWindow):
     selected_item_download = ""
     selected_item = ""
     lock = False
+    end_loading = False
 
     def __init__(self):
         """Constructor"""
         super().__init__()  # Call the inherited classes __init__ method
-        uic.loadUi('.\\gui\\resources\\mainwindow.ui', self)  # Load the .ui file
         self.show()  # Show the GUI
+        if platform.system() == 'Windows':
+            uic.loadUi('.\\gui\\resources\\mainwindow.ui', self)
+        elif platform.system() == 'Linux':
+            uic.loadUi('./gui/resources/mainwindow.ui', self)
+        elif platform.system() == 'Darwin':
+            uic.loadUi('./gui/resources/mainwindow.ui', self)
 
         self.qt_url_list = self.findChild(QtWidgets.QListWidget, 'UrlList')
         self.qt_url_list.itemDoubleClicked.connect(self.click_on_element)
@@ -119,6 +124,11 @@ class MainWindowQt(QtWidgets.QMainWindow):
         self.spinner.setInnerRadius(10)
         self.spinner.setRevolutionsPerSecond(1)
 
+        self.qt_downloading_list = self.findChild(QtWidgets.QListWidget, 'downloadingList')
+        self.qt_downloading_list.itemSelectionChanged.connect(self.change_selection_download)
+        self.qt_stop_btn = self.findChild(QtWidgets.QPushButton, 'stopButton')
+        self.qt_stop_btn.clicked.connect(self.stop)
+
         self.spinner_down = QtWaitingSpinner(self.qt_downloading_list, disableParentWhenSpinning=True)
         self.spinner_down.setRoundness(70.0)
         self.spinner_down.setMinimumTrailOpacity(15.0)
@@ -146,8 +156,20 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def update_list(self):
         """Update the list of url in background"""
         self.spinner.start()
+        self.end_loading = False
+        self.qt_url_list.clear()
         thread = Thread(target=update_list_background, args=(self,))
         thread.start()
+        while not self.end_loading:
+            QtTest.QTest.qWait(50)
+
+        self.qt_current_position.setText(self.current_url)
+        for i in self.url_list:
+            if 'jpg' in i:
+                self.qt_url_list.addItem(i.split('/')[-1])
+            else:
+                self.qt_url_list.addItem(i.split('/')[-2])
+        self.spinner.stop()
 
     def back_click(self):
         """Action on click on back button"""
@@ -240,8 +262,6 @@ class MainWindowQt(QtWidgets.QMainWindow):
         self.qt_downloading_list.addItem(self.selected_item)
         self.downloading_list.append(tmp)
         tmp.start()
-        # downloader = Process(target=scrapy_downloader, args=(self.selected_item,))
-        # downloader.start()
 
     def closeEvent(self, event):
         """Closing event, request if close or not the application"""
@@ -259,7 +279,9 @@ class MainWindowQt(QtWidgets.QMainWindow):
         """Stop the selected downloading"""
         self.spinner_down.start()
         if self.selected_item_download:
+            self.spinner_down.start()
             self.selected_item_download.stop()
+            self.selected_item_download = None
 
     def end_download(self, msg):
         """Notify end of the download"""

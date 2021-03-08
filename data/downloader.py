@@ -2,6 +2,7 @@ import os
 import time
 from threading import Thread
 from queue import Queue
+import platform
 import requests
 from PyQt5 import QtCore
 from lxml import html
@@ -32,6 +33,9 @@ def get_url_list_download(url, urls, run):
     """get all the urls in the page"""
     if not run():
         return
+    if 'jpg' in url:
+        urls.put(url)
+        return
     req = requests.get(BASE_URL + url)
     tree = html.fromstring(req.content)
 
@@ -49,13 +53,32 @@ def get_url_list_download(url, urls, run):
         get_url_list_download(tree.cssselect('div.next-and-last')[0][0].get('href'), urls, run)
 
 
+def compute_path(image):
+    """Compute the path where save a collection"""
+    path = os.getcwd()
+    try:
+        if platform.system() == "Windows":
+            path += "\\Download\\"
+            for folder in image[3:].split('/')[:-1]:
+                path += folder + "\\"
+        elif platform.system() == "Linux":
+            path += "/Download/"
+            for folder in image[3:].split('/')[:-1]:
+                path += folder + "/"
+        elif platform.system() == 'Darwin':
+            path += "/Download/"
+            for folder in image[3:].split('/')[:-1]:
+                path += folder + "/"
+        if not os.path.exists(path):
+            os.makedirs(path)
+    except:
+        pass
+    return path
+
+
 def save_image(image):
     """Save image to local device"""
-    path = os.getcwd() + "\\Download\\"
-    for folder in image[3:].split('/')[:-1]:
-        path += folder + "\\"
-    if folder and not os.path.exists(path):
-        os.makedirs(path)
+    path = compute_path(image)
     request = requests.get(BASE_URL + image)
     data_image = html.fromstring(request.content)
     img_src = data_image.xpath('//*[@id="gsImageView"]//a')[0].attrib.get('href')
@@ -129,10 +152,7 @@ class ImageDownloader(QtCore.QThread):
             p.join()
         self.run = False
 
-        path = os.getcwd() + "\\Download\\"
-        for folder in self.start_url[3:].split('/')[:-1]:
-            path += folder + "\\"
-        size = get_size(path)
+        size = get_size(compute_path(self.start_url))
         msg = "Downloaded {} images of {:.2f} Mbytes in {} seconds".format(
             self.tot_download, size/1024/1024, str(datetime.now()-self.start_time).split('.')[0])
 

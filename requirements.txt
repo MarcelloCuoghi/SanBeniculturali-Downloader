@@ -1,7 +1,4 @@
-requests~=2.25.1
-Pillow
-Protego
+requests
 lxml
-twisted
-pyqt
-itemadapter
+pyqt5
+cssselect
