@@ -4,17 +4,11 @@ import platform
 import subprocess
 import time
 from threading import Thread
-from multiprocessing import Process
 import webbrowser
 
 from PyQt5.QtCore import Qt
-import requests
-from scrapy.utils.project import get_project_settings
-from scrapy.crawler import CrawlerRunner
-from twisted.internet import reactor
-from data.spiders.spiders import SanBeniculturaliDownloader
 from .waitingspinnerwidget import QtWaitingSpinner
-from PyQt5 import QtWidgets, uic, QtCore
+from PyQt5 import QtWidgets, uic, QtCore, QtTest
 from data.downloader import BASE_URL, get_url_list, ImageDownloader
 
 
@@ -22,33 +16,7 @@ def update_list_background(caller):
     """Start the download of urls in background"""
     caller.url_list = []
     get_url_list(caller.current_url, caller.url_list)
-
-    caller.qt_current_position.setText(caller.current_url)
-    caller.qt_url_list.clear()
-    for i in caller.url_list:
-        if 'jpg' in i:
-            caller.qt_url_list.addItem(i.split('/')[-1])
-        else:
-            caller.qt_url_list.addItem(i.split('/')[-2])
-    caller.qt_url_list.setCurrentRow(0)
-    caller.spinner.stop()
-
-
-def scrapy_downloader(url):
-    """download the request registry from the given url"""
-    settings_file_path = 'data.settings'  # The path seen from root, ie. from main.py
-    os.environ.setdefault('SCRAPY_SETTINGS_MODULE', settings_file_path)
-
-    settings = get_project_settings()
-    path = os.getcwd()
-    path += "\\Download"
-    if not os.path.exists(path):
-        os.makedirs(path)
-    settings['IMAGES_STORE'] = path
-    runner = CrawlerRunner(settings)
-    crawler = runner.crawl(SanBeniculturaliDownloader, start_urls=[BASE_URL + url, ])
-    crawler.addBoth(lambda _: reactor.stop())
-    reactor.run()
+    caller.end_loading = True
 
 
 def open_folder():
@@ -96,6 +64,7 @@ class MainWindowQt(QtWidgets.QMainWindow):
     selected_item_download = ""
     selected_item = ""
     lock = False
+    end_loading = False
 
     def __init__(self):
         """Constructor"""
@@ -155,6 +124,16 @@ class MainWindowQt(QtWidgets.QMainWindow):
         self.qt_downloading_list.itemSelectionChanged.connect(self.change_selection_download)
         self.qt_stop_btn = self.findChild(QtWidgets.QPushButton, 'stopButton')
         self.qt_stop_btn.clicked.connect(self.stop)
+        
+        self.spinner_down = QtWaitingSpinner(self.qt_downloading_list, disableParentWhenSpinning=True)
+        self.spinner_down.setRoundness(70.0)
+        self.spinner_down.setMinimumTrailOpacity(15.0)
+        self.spinner_down.setTrailFadePercentage(70.0)
+        self.spinner_down.setNumberOfLines(12)
+        self.spinner_down.setLineLength(10)
+        self.spinner_down.setLineWidth(5)
+        self.spinner_down.setInnerRadius(10)
+        self.spinner_down.setRevolutionsPerSecond(1)
 
         self.update_list()
 
@@ -173,8 +152,20 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def update_list(self):
         """Update the list of url in background"""
         self.spinner.start()
+        self.end_loading = False
+        self.qt_url_list.clear()
         thread = Thread(target=update_list_background, args=(self,))
         thread.start()
+        while not self.end_loading:
+            QtTest.QTest.qWait(50)
+
+        self.qt_current_position.setText(self.current_url)
+        for i in self.url_list:
+            if 'jpg' in i:
+                self.qt_url_list.addItem(i.split('/')[-1])
+            else:
+                self.qt_url_list.addItem(i.split('/')[-2])
+        self.spinner.stop()
 
     def back_click(self):
         """Action on click on back button"""
@@ -242,7 +233,10 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def download(self):
         """Request for confirmation about downloading current item"""
         if self.selected_item:
-            item_name = "..." + self.selected_item[len(self.selected_item)-35:-1]
+            if len(self.selected_item) - 35 < 0:
+                item_name = "..." + self.selected_item[0:-1]
+            else:
+                item_name = "..." + self.selected_item[len(self.selected_item)-35:-1]
             msg_box = QtWidgets.QMessageBox()
 
             msg_box.setTextFormat(QtCore.Qt.RichText)
@@ -282,15 +276,17 @@ class MainWindowQt(QtWidgets.QMainWindow):
     def stop(self):
         """Stop the selected downloading"""
         if self.selected_item_download:
+            self.spinner_down.start()
             self.selected_item_download.stop()
+            self.selected_item_download = None
 
     def end_download(self, msg):
         """Notify end of the download"""
         info_msg = msg.split('|')[0]
         url = msg.split('|')[1]
         msg_box = QtWidgets.QMessageBox()
-        msg_box.setWindowTitle("Download complete!")
-        msg_box.setText(info_msg)
+        msg_box.setWindowTitle("Download complete")
+        msg_box.setText(info_msg + "\n{}".format(url))
         msg_box.exec()
 
         for i in range(len(self.downloading_list)):
@@ -298,3 +294,5 @@ class MainWindowQt(QtWidgets.QMainWindow):
                 self.downloading_list.remove(self.downloading_list[i])
                 self.qt_downloading_list.takeItem(i)
                 break
+
+        self.spinner_down.stop()
