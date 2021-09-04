@@ -11,7 +11,7 @@ from datetime import datetime
 from multiprocessing import Process
 
 
-BASE_URL = 'http://dl.antenati.san.beniculturali.it'
+BASE_URL = 'http://dl.antenati.san.beniculturali.it/gallery2/'
 
 
 def get_url_list(url, urls):
@@ -59,15 +59,15 @@ def compute_path(image):
     try:
         if platform.system() == "Windows":
             path += "\\Download\\"
-            for folder in image[3:].split('/')[:-1]:
+            for folder in image[12:].split('/')[:-1]:
                 path += folder + "\\"
         elif platform.system() == "Linux":
             path += "/Download/"
-            for folder in image[3:].split('/')[:-1]:
+            for folder in image[12:].split('/')[:-1]:
                 path += folder + "/"
         elif platform.system() == 'Darwin':
             path += "/Download/"
-            for folder in image[3:].split('/')[:-1]:
+            for folder in image[12:].split('/')[:-1]:
                 path += folder + "/"
         if not os.path.exists(path):
             os.makedirs(path)

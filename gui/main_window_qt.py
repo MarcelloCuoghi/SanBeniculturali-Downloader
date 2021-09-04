@@ -59,7 +59,7 @@ class MainWindowQt(QtWidgets.QMainWindow):
     """Main windows class"""
     url_list = []
     downloading_list = []
-    current_url = "/gallery/"
+    current_url = ""
     selected_item_download = ""
     selected_item = ""
     lock = False
@@ -178,7 +178,7 @@ class MainWindowQt(QtWidgets.QMainWindow):
             if tmp != '/v':
                 self.current_url = tmp
             else:
-                self.current_url = "/gallery"
+                self.current_url = ""
             self.update_list()
 
     def open_in_browser_from_label(self):
@@ -192,7 +192,7 @@ class MainWindowQt(QtWidgets.QMainWindow):
 
     def reset(self):
         """Return to the starting point"""
-        self.current_url = "/gallery"
+        self.current_url = ""
         self.update_list()
 
     def click_on_element(self, item=None):
