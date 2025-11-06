@@ -1,15 +1,12 @@
 """Main starting script"""
-import multiprocessing
-import sys
-import platform
-from PyQt5 import QtWidgets
-from gui.main_window_qt import MainWindowQt
-import multiprocessing
 
+import typer
+
+from data.downloader import get_archives_list
+
+def print_results():
+    for i, elem in enumerate(get_archives_list()):
+        print(f"{i}-{elem[41:-1].replace("-", " ")}")
 
 if __name__ == "__main__":
-    if platform.system() == 'Windows':
-        multiprocessing.freeze_support()
-    app = QtWidgets.QApplication(sys.argv)  # Create an instance of QtWidgets.QApplication
-    window = MainWindowQt()  # Create an instance of our class
-    app.exec_()  # Start the application
+    typer.run(print_results)

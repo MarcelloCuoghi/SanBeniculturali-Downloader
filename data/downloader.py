@@ -3,6 +3,7 @@ import time
 from threading import Thread
 from queue import Queue
 import platform
+from typing import List
 import requests
 from PyQt5 import QtCore
 from lxml import html
@@ -11,11 +12,32 @@ from datetime import datetime
 from multiprocessing import Process
 
 
-BASE_URL = 'http://dl.antenati.san.beniculturali.it/gallery2/'
+BASE_URL = 'https://antenati.cultura.gov.it/esplora-gli-archivi/'
+
+
+def get_archives_list() -> List[str]:
+    """Get all the archives urls in the main page
+    
+    Return:
+        List[str]: list of all archives urls.
+    """
+    req = requests.get(BASE_URL)
+    tree = html.fromstring(req.content)
+
+    results = []
+
+    urls_list = tree.xpath('//*[@id="post-9273"]/div/div[3]/div/div/div[2]/div/ul/li')
+    for elem in urls_list:
+        results.append(elem[0].attrib['href'])
+    return results
+
+    # next_page = tree.cssselect('di'v.next-and-last')
+    # if next_page and len(next_page) and len(next_page[0]):
+    #     get_url_list(tree.cssselect(div.next-and-last')[0][0].get('href'), urls)
 
 
 def get_url_list(url, urls):
-    """get all the urls in the page"""
+    """Get all the urls in the page"""
     req = requests.get(BASE_URL + url)
     tree = html.fromstring(req.content)
 

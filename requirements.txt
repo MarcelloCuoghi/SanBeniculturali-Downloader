@@ -1,4 +1,4 @@
 requests
 lxml
-pyqt5
+typer
 cssselect
