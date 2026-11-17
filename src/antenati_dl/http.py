@@ -105,7 +105,9 @@ class HttpClient:
 
     def get_text(self, url: str, params: dict | None = None) -> str:
         resp = self.get(url, params=params)
-        resp.encoding = resp.encoding or "utf-8"
+        # requests defaults text/* without charset to ISO-8859-1; the portal is UTF-8
+        if "charset" not in resp.headers.get("Content-Type", "").lower():
+            resp.encoding = "utf-8"
         return resp.text
 
     def get_json(self, url: str) -> dict:
@@ -122,7 +124,7 @@ class HttpClient:
         cancelled: Callable[[], bool] | None = None,
     ) -> bytes:
         """Download an image, retrying on empty/invalid bodies. Returns the JPEG/PNG bytes."""
-        attempts = attempts or self.retries
+        attempts = max(1, attempts or self.retries)  # retries=0 must still mean one attempt
         last_error: Exception | None = None
         for attempt in range(1, attempts + 1):
             if cancelled and cancelled():
@@ -135,6 +137,11 @@ class HttpClient:
                 last_error = PortalError(f"empty or invalid image body ({len(data)} bytes)")
             except BlockedError:
                 raise
+            except requests.HTTPError as exc:
+                status = exc.response.status_code if exc.response is not None else 0
+                if 400 <= status < 500 and status not in (408, 429):
+                    raise PortalError(f"Unable to download {url}: HTTP {status}") from exc
+                last_error = exc
             except (requests.RequestException, PortalError) as exc:
                 last_error = exc
             delay = self.backoff * (2 ** (attempt - 1))

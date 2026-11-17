@@ -99,7 +99,8 @@ _YEAR_RE = re.compile(r"\b(1[0-9]{3}|20[0-9]{2})\b")
 def _parse_year_spec(spec: str) -> set[int]:
     """``"1911"``, ``"1860-1865"``, ``"1860,1870"`` -> set of years."""
     years: set[int] = set()
-    for part in re.split(r"[,;\s]+", spec.strip()):
+    spec = re.sub(r"\s*[-–]\s*", "-", spec.strip())
+    for part in re.split(r"[,;\s]+", spec):
         found = [int(y) for y in _YEAR_RE.findall(part)]
         if len(found) >= 2 and "-" in part:
             lo, hi = min(found[0], found[1]), max(found[0], found[1])
@@ -336,6 +337,8 @@ class Portal:
         self._fondi: dict[int, list[Fondo]] = {}
         self._manifest_urls: dict[str, str] = {}
         self._manifests: dict[str, Manifest] = {}
+        # results of year-less queries used by the tipologia+year workaround
+        self._unfiltered: dict[tuple, tuple[list[RegisterSummary], dict[str, Facet]]] = {}
 
     # ---------------------------------------------------------------- archives
     def archives(self, refresh: bool = False) -> list[Archive]:
@@ -374,11 +377,11 @@ class Portal:
     def fondi(self, archive_id: int) -> list[Fondo]:
         with self._lock:
             if archive_id in self._fondi:
-                return self._fondi[archive_id]
+                return list(self._fondi[archive_id])
         fondi = parse_fondi(self.http.get_text(ARCHIVE_URL, params={"archivio": archive_id}), archive_id)
         with self._lock:
             self._fondi[archive_id] = fondi
-        return fondi
+        return list(fondi)
 
     # ---------------------------------------------------------------- search
     def search(self, query: SearchQuery, page: int = 1, size: int = 100) -> SearchPage:
@@ -407,12 +410,20 @@ class Portal:
         self, query: SearchQuery, years: set[int], page: int, size: int
     ) -> SearchPage:
         base = without_years(query)
-        first = self._search_raw(base, 1, MAX_PAGE_SIZE)
-        registers = list(first.registers)
-        for extra in range(2, first.page_count + 1):
-            registers.extend(self._search_raw(base, extra, MAX_PAGE_SIZE).registers)
+        key = tuple(sorted(base.to_params(1, MAX_PAGE_SIZE).items()))
+        with self._lock:
+            cached = self._unfiltered.get(key)
+        if cached is None:
+            first = self._search_raw(base, 1, MAX_PAGE_SIZE)
+            registers = list(first.registers)
+            for extra in range(2, first.page_count + 1):
+                registers.extend(self._search_raw(base, extra, MAX_PAGE_SIZE).registers)
+            cached = (registers, first.facets)
+            with self._lock:
+                self._unfiltered[key] = cached
+        registers, base_facets = cached
         matching = [r for r in registers if register_years(r.title) & years]
-        facets = dict(first.facets)
+        facets = dict(base_facets)
         if "anni_is" in facets:  # keep only the selected years in the year facet
             facets["anni_is"] = Facet(
                 "anni_is",
@@ -433,6 +444,8 @@ class Portal:
         self, query: SearchQuery, limit: int | None = None, size: int = MAX_PAGE_SIZE
     ) -> Iterator[RegisterSummary]:
         """Yield every register matching ``query`` (handles pagination)."""
+        if limit is not None and limit <= 0:
+            return
         page, yielded = 1, 0
         seen: set[str] = set()
         while True:

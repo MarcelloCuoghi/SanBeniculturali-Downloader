@@ -103,7 +103,9 @@ class Estimate:
 
     def describe(self) -> str:
         approx = "" if self.exact else "~"
-        return f"{self.registers} registers, {approx}{self.pages} pages, {approx}{format_bytes(self.bytes)}"
+        regs = "register" if self.registers == 1 else "registers"
+        pages = "page" if self.pages == 1 else "pages"
+        return f"{self.registers} {regs}, {approx}{self.pages} {pages}, {approx}{format_bytes(self.bytes)}"
 
 
 class Downloader:
@@ -192,16 +194,34 @@ class Downloader:
         return Estimate(registers, pages, pages * per_page, exact)
 
     def iter_jobs(self, targets: Iterable[DownloadTarget]) -> Iterator[tuple[Manifest, list[Page]]]:
-        """Resolve targets lazily into ``(manifest, pages)`` pairs."""
+        """Resolve targets lazily into ``(manifest, pages)`` pairs (raises on the first bad register)."""
+        for manifest, pages, error in self._iter_jobs(targets):
+            if error is not None:
+                raise error
+            yield manifest, pages  # type: ignore[misc]
+
+    def _iter_jobs(
+        self, targets: Iterable[DownloadTarget]
+    ) -> Iterator[tuple[Manifest | None, list[Page] | None, Exception | None]]:
+        """Like :meth:`iter_jobs` but yields errors instead of raising them: an exception raised
+        inside a generator ends it, which would silently drop every following register."""
         for t in targets:
-            if t.query is not None:
-                for summary in self.portal.iter_registers(t.query, limit=t.limit):
-                    if self.cancelled:
-                        return
-                    yield self._load(summary), None  # type: ignore[misc]  # all pages
-            else:
-                manifest = self._load(t.register)
-                yield manifest, self.select_pages(manifest, t)
+            try:
+                if t.query is not None:
+                    for summary in self.portal.iter_registers(t.query, limit=t.limit):
+                        if self.cancelled:
+                            return
+                        try:
+                            manifest = self._load(summary)
+                        except Exception as exc:  # noqa: BLE001
+                            yield None, None, exc
+                            continue
+                        yield manifest, None, None  # all pages
+                else:
+                    manifest = self._load(t.register)
+                    yield manifest, self.select_pages(manifest, t), None
+            except Exception as exc:  # noqa: BLE001
+                yield None, None, exc
 
     def run(self, targets: list[DownloadTarget]) -> DownloadReport:
         report = DownloadReport()
@@ -217,10 +237,12 @@ class Downloader:
         workers = max(1, int(self.options.workers))
         with ThreadPoolExecutor(max_workers=workers, thread_name_prefix="antenati-dl") as pool:
             index = 0
-            jobs = self.iter_jobs(targets)
+            jobs = self._iter_jobs(targets)
             while not self.cancelled:
                 try:
-                    manifest, pages = next(jobs)
+                    manifest, pages, error = next(jobs)
+                    if error is not None:
+                        raise error
                 except StopIteration:
                     break
                 except Exception as exc:  # noqa: BLE001 - one bad register must not stop a bulk job
