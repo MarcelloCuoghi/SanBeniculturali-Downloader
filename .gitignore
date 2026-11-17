@@ -140,3 +140,8 @@ SanBeniculturali-Downloader.sln
 # misc
 schemas
 /Download/
+
+# antenati-dl
+!packaging/antenati-dl.spec
+Download/
+*.part
