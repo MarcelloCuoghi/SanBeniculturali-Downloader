@@ -1,0 +1,57 @@
+[build-system]
+requires = ["hatchling>=1.24"]
+build-backend = "hatchling.build"
+
+[project]
+name = "antenati-dl"
+version = "1.0.0"
+description = "Browse and download registers from the Portale Antenati (antenati.cultura.gov.it) - CLI and GUI"
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Marcello Cuoghi" }]
+keywords = ["genealogy", "antenati", "iiif", "downloader", "archivio di stato"]
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "Environment :: Console",
+    "Environment :: X11 Applications :: Qt",
+    "Topic :: Sociology :: Genealogy",
+]
+dependencies = [
+    "requests>=2.31",
+    "lxml>=5.0",
+    "rich>=13.7",
+]
+
+[project.optional-dependencies]
+gui = ["PySide6>=6.6"]
+pdf = ["img2pdf>=0.5"]
+
+[project.scripts]
+antenati-dl = "antenati_dl.cli:main"
+
+[project.gui-scripts]
+antenati-dl-gui = "antenati_dl.gui.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.0",
+    "responses>=0.25",
+    "ruff>=0.6",
+]
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/antenati_dl"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+markers = ["network: tests that hit the real Portale Antenati (deselect with -m 'not network')"]
+addopts = "-m 'not network'"
+
+[tool.ruff]
+line-length = 110
+target-version = "py310"
+src = ["src", "tests"]
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "B", "UP", "SIM"]
