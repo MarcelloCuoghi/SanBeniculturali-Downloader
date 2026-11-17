@@ -103,7 +103,7 @@ class Estimate:
 
     def describe(self) -> str:
         approx = "" if self.exact else "~"
-        return f"{self.registers} registri, {approx}{self.pages} pagine, {approx}{format_bytes(self.bytes)}"
+        return f"{self.registers} registers, {approx}{self.pages} pages, {approx}{format_bytes(self.bytes)}"
 
 
 class Downloader:
@@ -211,7 +211,7 @@ class Downloader:
             report.errors.append(str(exc))
             report.registers_failed += 1
             self._emit(EventKind.REGISTER_FAILED, message=str(exc), error=str(exc))
-            self._emit(EventKind.FINISHED, message="Download non avviato")
+            self._emit(EventKind.FINISHED, message="Download not started")
             return report
 
         workers = max(1, int(self.options.workers))
@@ -229,7 +229,7 @@ class Downloader:
                     report.errors.append(str(exc))
                     self._emit(
                         EventKind.REGISTER_FAILED,
-                        message=f"Registro non disponibile: {exc}",
+                        message=f"Register not available: {exc}",
                         register_index=index,
                         register_total=register_total,
                         error=str(exc),
@@ -250,12 +250,12 @@ class Downloader:
 
         report.cancelled = self.cancelled
         if report.cancelled:
-            self._emit(EventKind.CANCELLED, message="Download annullato")
+            self._emit(EventKind.CANCELLED, message="Download cancelled")
         self._emit(
             EventKind.FINISHED,
             message=(
-                f"{report.pages_downloaded} pagine scaricate ({format_bytes(report.bytes_downloaded)}), "
-                f"{report.pages_skipped} già presenti, {report.pages_failed} errori"
+                f"{report.pages_downloaded} pages downloaded ({format_bytes(report.bytes_downloaded)}), "
+                f"{report.pages_skipped} already present, {report.pages_failed} failed"
             ),
             bytes=report.bytes_downloaded,
         )
@@ -285,8 +285,7 @@ class Downloader:
         needed = pages * estimate_page_bytes(self.options.size) + self.options.min_free_bytes
         if free < needed:
             raise InsufficientSpaceError(
-                f"Spazio su disco insufficiente: liberi {format_bytes(free)}, "
-                f"servono circa {format_bytes(needed)}"
+                f"Not enough disk space: {format_bytes(free)} free, about {format_bytes(needed)} needed"
             )
 
     def _download_register(
@@ -319,7 +318,7 @@ class Downloader:
         common = {"register": manifest, "register_index": index, "register_total": register_total}
         self._emit(
             EventKind.REGISTER_START,
-            message=f"{manifest.label} - {total} pagine",
+            message=f"{manifest.label} - {total} pages",
             pages_total=total,
             path=str(directory),
             **common,
@@ -356,7 +355,7 @@ class Downloader:
                         continue  # interrupted by the user, not a real failure
                     failed += 1
                     report.pages_failed += 1
-                    msg = f"{manifest.register_id} pagina {page.index}: {exc}"
+                    msg = f"{manifest.register_id} page {page.index}: {exc}"
                     report.errors.append(msg)
                     self._emit(
                         EventKind.PAGE_FAILED,
@@ -388,11 +387,11 @@ class Downloader:
             report.registers_failed += 1
             self._emit(
                 EventKind.REGISTER_FAILED,
-                message=f"{failed} pagine non scaricate",
+                message=f"{failed} pages not downloaded",
                 pages_done=done,
                 pages_total=total,
                 path=str(directory),
-                error=f"{failed} pagine non scaricate",
+                error=f"{failed} pages not downloaded",
                 **common,
             )
             return
@@ -440,7 +439,7 @@ class Downloader:
         try:
             import img2pdf  # type: ignore[import-not-found]
         except ImportError:
-            self._emit(EventKind.LOG, message="PDF non creato: installare il pacchetto opzionale 'img2pdf'")
+            self._emit(EventKind.LOG, message="PDF not created: install the optional 'img2pdf' package")
             return
         files = [str(self.page_path(manifest, p)) for p in pages if self.page_path(manifest, p).exists()]
         if not files:
@@ -448,6 +447,6 @@ class Downloader:
         target = directory / "register.pdf"
         try:
             target.write_bytes(img2pdf.convert(files))
-            self._emit(EventKind.LOG, message=f"PDF creato: {target}", path=str(target))
+            self._emit(EventKind.LOG, message=f"PDF created: {target}", path=str(target))
         except Exception as exc:  # noqa: BLE001
-            self._emit(EventKind.LOG, message=f"PDF non creato: {exc}", error=str(exc))
+            self._emit(EventKind.LOG, message=f"PDF not created: {exc}", error=str(exc))
