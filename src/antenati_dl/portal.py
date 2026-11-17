@@ -498,5 +498,6 @@ class Portal:
         """IIIF ``info.json`` of a page (width/height of the original scan)."""
         return self.http.get_json(f"{page.service_url}/info.json")
 
-    def thumbnail(self, page: Page, height: int = 200) -> bytes:
-        return self.http.get_image(page.thumbnail_url(height))
+    def thumbnail(self, page: Page, height: int = 200, attempts: int = 2) -> bytes:
+        """Small preview image; few retries since it is interactive and cheap to re-request."""
+        return self.http.get_image(page.thumbnail_url(height), attempts=attempts)
