@@ -208,3 +208,24 @@ def test_get_image_cancelled_between_attempts(no_sleep):
     with pytest.raises(PortalError, match="cancelled"):
         client.get_image(IMG_URL, cancelled=lambda: next(checks))
     assert len(responses.calls) == 1
+
+
+@responses.activate
+def test_get_image_backoff_sleep_is_interrupted_by_cancel(monkeypatch):
+    # the backoff between attempts (up to 8 s with the defaults) used to be a plain sleep, delaying
+    # the cancellation of a download (and the GUI shutdown that waits for it)
+    client = HttpClient(retries=5, backoff=4.0)
+    responses.get(IMG_URL, body=b"")
+    state = {"cancel": False}
+    slept: list[float] = []
+
+    def fake_sleep(seconds):
+        slept.append(seconds)
+        if len(slept) == 2:
+            state["cancel"] = True  # the user cancels while we wait
+
+    monkeypatch.setattr("antenati_dl.http.time.sleep", fake_sleep)
+    with pytest.raises(PortalError, match="cancelled"):
+        client.get_image(IMG_URL, cancelled=lambda: state["cancel"])
+    assert len(responses.calls) == 1
+    assert sum(slept) < 4.0

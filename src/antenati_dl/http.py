@@ -147,8 +147,22 @@ class HttpClient:
             delay = self.backoff * (2 ** (attempt - 1))
             log.debug("Image %s attempt %d failed (%s), retrying in %.1fs", url, attempt, last_error, delay)
             if attempt < attempts:
-                time.sleep(delay)
+                _sleep(delay, cancelled)
         raise PortalError(f"Unable to download {url}: {last_error}")
+
+
+def _sleep(delay: float, cancelled: Callable[[], bool] | None, step: float = 0.25) -> None:
+    """``time.sleep(delay)``, but wake up early (raising) when ``cancelled()`` becomes true."""
+    if cancelled is None:
+        time.sleep(delay)
+        return
+    remaining = delay
+    while remaining > 0:
+        if cancelled():
+            raise PortalError("cancelled")
+        chunk = min(step, remaining)
+        time.sleep(chunk)
+        remaining -= chunk
 
 
 def is_image(data: bytes) -> bool:

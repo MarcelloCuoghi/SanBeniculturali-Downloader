@@ -103,6 +103,22 @@ def test_parse_fondi_without_series_and_descrizione_fallback():
     assert fondi[1].series == ()
 
 
+def test_parse_fondi_skips_elements_without_numeric_id():
+    # used to raise TypeError/ValueError (a traceback in the CLI) for the whole archive page
+    page = """
+    <div id="archive_property">
+      <div data-property="1"><h3>Fondo</h3></div>
+      <div data-property=""><h3>Senza id</h3></div>
+      <div data-property="x"><h3>Id non numerico</h3></div>
+    </div>
+    <div class="property-toponym"><a href="/search-registry/?serie=99">Orfano</a></div>
+    <div class="property-toponym" data-id="1"><a href="/search-registry/?serie=11">Paese</a></div>
+    """
+    fondi = parse_fondi(page, 5)
+    assert [(f.id, f.name) for f in fondi] == [(1, "Fondo")]
+    assert [s.id for s in fondi[0].series] == [11]
+
+
 # --------------------------------------------------------------------------- search
 @pytest.fixture(scope="module")
 def serie_page():

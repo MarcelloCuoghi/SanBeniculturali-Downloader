@@ -177,9 +177,9 @@ class ThumbnailLoader(QObject):
         self.failed.emit(page.image_id)
         self._pump()
 
-    def shutdown(self, timeout_ms: int = 2000) -> None:
+    def shutdown(self, timeout_ms: int = 2000) -> bool:
         self.clear_queue()
-        self.runner.shutdown(timeout_ms)
+        return self.runner.shutdown(timeout_ms)
 
 
 class ThumbnailModel(QAbstractListModel):
@@ -199,6 +199,7 @@ class ThumbnailModel(QAbstractListModel):
     def set_pages(self, pages: list[Page]) -> None:
         self.beginResetModel()
         self.loader.clear_queue()
+        self.loader.retry_failed()  # a thumbnail that failed once (portal glitch) is retried on reload
         self.pages = list(pages)
         self._rows = {p.image_id: i for i, p in enumerate(self.pages)}
         self._pixmaps = {}

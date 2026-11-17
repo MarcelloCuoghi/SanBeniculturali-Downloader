@@ -2,7 +2,9 @@
 
 from __future__ import annotations
 
+import logging
 import os
+import threading
 import time
 
 os.environ.setdefault("QT_QPA_PLATFORM", "offscreen")
@@ -349,6 +351,149 @@ def test_close_with_running_download_cancels(window, monkeypatch):
     assert job.cancel_event.is_set()
     QApplication.processEvents()
     assert job.state in (JobState.CANCELLING, JobState.CANCELLED)
+
+
+def test_rapid_selection_skips_stale_requests(window):
+    """Moving quickly through registers must not fetch every stale one before the selected one."""
+    win = window
+    wait_until(lambda: win.nav_model.rowCount() == 2 and win.runner.pending_count == 0)
+    gate = threading.Event()
+    calls: list[str] = []
+    real_manifest = win.portal.manifest
+
+    def manifest(ref):
+        calls.append(ref)
+        if len(calls) == 1:
+            gate.wait(5)
+        return real_manifest(ref)
+
+    win.portal.manifest = manifest
+    win.runner.pool.setMaxThreadCount(1)
+    win.load_register("an_ua1")
+    wait_until(lambda: len(calls) == 1)
+    for ref in ("an_ua2", "an_ua3", "an_ua4"):
+        win.load_register(ref)
+    gate.set()
+    wait_until(lambda: win.current_manifest is not None and win.runner.pending_count == 0)
+    assert calls == ["an_ua1", "an_ua4"]
+    assert win.register_view.model.rowCount() == N_PAGES
+
+
+def test_preview_closed_while_loading(window, caplog):
+    """A result arriving after the preview was closed must not touch its deleted widgets."""
+    win = window
+    wait_until(lambda: win.nav_model.rowCount() == 2 and win.runner.pending_count == 0)
+    win.load_register("an_ua1")
+    wait_until(lambda: win.current_manifest is not None)
+    gate = threading.Event()
+    http = win.portal.http
+    real_get_image = http.get_image
+
+    def slow_get_image(url, attempts=None, cancelled=None):
+        gate.wait(5)
+        return real_get_image(url)
+
+    http.get_image = slow_get_image
+    from antenati_dl.gui.dialogs import PreviewDialog
+
+    PreviewDialog._cache.clear()
+    win.preview_page(5)
+    dlg = win._preview
+    destroyed = []
+    dlg.destroyed.connect(lambda *_: destroyed.append(True))
+    dlg.close()
+    wait_until(lambda: bool(destroyed))
+    caplog.set_level(logging.WARNING)
+    gate.set()
+    wait_until(lambda: win.runner.pending_count == 0)
+    assert not [r for r in caplog.records if r.levelno >= logging.WARNING], caplog.text
+
+
+def test_background_work_running_tracks_stuck_download(window):
+    win = window
+    wait_until(lambda: win.runner.pending_count == 0)
+    release = threading.Event()
+
+    class StuckDownloader(FakeDownloader):
+        def run(self, targets):  # e.g. a request hanging on a dead connection: ignores the cancel
+            release.wait(5)
+            return DownloadReport(cancelled=True)
+
+    win.manager.factory = StuckDownloader
+    job = win.manager.enqueue("stuck", [DownloadTarget.from_ref("an_ua1")], win.settings.download_options())
+    wait_until(lambda: win.manager.threads_running())
+    win.manager.cancel(job.id)
+    assert win.background_work_running()
+    release.set()
+    assert win.manager.wait(5000)
+    assert not win.background_work_running()
+    wait_until(lambda: not win.manager.has_active())  # else closing the window asks for confirmation
+
+
+def test_app_exits_without_destructors_when_threads_are_stuck(qapp, monkeypatch):
+    """Destroying a running QThread aborts the process: app.main must leave with os._exit instead."""
+    from antenati_dl.gui import app as app_module
+    from antenati_dl.gui import main_window
+
+    class FakeWindow:
+        busy = True
+
+        def show(self):
+            pass
+
+        def background_work_running(self):
+            return FakeWindow.busy
+
+    exits: list[int] = []
+
+    class Exited(Exception):
+        pass
+
+    def fake_exit(code):
+        exits.append(code)
+        raise Exited
+
+    monkeypatch.setattr(main_window, "MainWindow", FakeWindow)
+    monkeypatch.setattr(QApplication, "exec", lambda *_a: 0)
+    monkeypatch.setattr(app_module.os, "_exit", fake_exit)
+    names = (qapp.applicationName(), qapp.organizationName(), qapp.applicationDisplayName())
+    with pytest.raises(Exited):
+        app_module.main([])
+    assert exits == [0]
+    FakeWindow.busy = False
+    assert app_module.main([]) == 0 and exits == [0]
+    qapp.setApplicationName(names[0])
+    qapp.setOrganizationName(names[1])
+    qapp.setApplicationDisplayName(names[2])
+
+
+def test_failed_thumbnails_are_retried_when_the_register_is_shown_again(qapp):
+    from PySide6.QtCore import Qt
+
+    from antenati_dl.gui.register_view import ThumbnailLoader, ThumbnailModel
+
+    portal = FakePortal(_jpeg())
+    fail = {"IMG1"}
+
+    def thumbnail(page, height=200):
+        portal.thumbnail_calls.append(page.image_id)
+        if page.image_id in fail:
+            raise OSError("empty body")
+        return portal.http.image
+
+    portal.thumbnail = thumbnail
+    loader = ThumbnailLoader(portal)
+    model = ThumbnailModel(loader)
+    pages = portal.manifest("an_ua1").pages[:1]
+    model.set_pages(pages)
+    model.data(model.index(0), Qt.ItemDataRole.DecorationRole)
+    wait_until(lambda: loader.has_failed("IMG1"))
+    fail.clear()
+    model.set_pages(pages)  # the register is selected again
+    model.data(model.index(0), Qt.ItemDataRole.DecorationRole)
+    wait_until(lambda: loader.cached("IMG1") is not None)
+    assert portal.thumbnail_calls == ["IMG1", "IMG1"]
+    loader.shutdown()
 
 
 def test_window_flags_and_title(window):

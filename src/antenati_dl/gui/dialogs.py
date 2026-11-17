@@ -176,7 +176,12 @@ class PreviewDialog(QDialog):
         close_btn.clicked.connect(self.close)
         QShortcut(QKeySequence(Qt.Key.Key_Left), self, activated=lambda: self.show_row(self.row - 1))
         QShortcut(QKeySequence(Qt.Key.Key_Right), self, activated=lambda: self.show_row(self.row + 1))
+        self.finished.connect(self._invalidate)
         self.show_row(row)
+
+    def _invalidate(self, *_args) -> None:
+        """Closed: pending results must not touch the (soon deleted) widgets, queued fetches are skipped."""
+        self._generation += 1
 
     @property
     def page(self) -> Page:
@@ -204,18 +209,23 @@ class PreviewDialog(QDialog):
         self.runner.submit(
             self._fetch,
             page,
+            gen,
             on_done=lambda img, g=gen, iid=page.image_id: self._loaded(g, iid, img),
             on_error=lambda exc, g=gen: self._failed(g, exc),
         )
 
-    def _fetch(self, page: Page) -> QImage:  # worker thread
+    def _fetch(self, page: Page, gen: int | None = None) -> QImage | None:  # worker thread
+        if gen is not None and gen != self._generation:
+            return None  # already moved to another page (e.g. arrow key held down) or closed
         data = self.portal.http.get_image(page.image_url(PREVIEW_WIDTH))
         img = QImage.fromData(data)
         if img.isNull():
             raise ValueError("invalid image data")
         return img
 
-    def _loaded(self, gen: int, image_id: str, img: QImage) -> None:
+    def _loaded(self, gen: int, image_id: str, img: QImage | None) -> None:
+        if img is None:  # skipped
+            return
         self._cache[image_id] = img
         while len(self._cache) > self.CACHE_SIZE:
             self._cache.popitem(last=False)

@@ -190,6 +190,10 @@ class DownloadManager(QObject):
     def running_count(self) -> int:
         return len(self._threads)
 
+    def threads_running(self) -> bool:
+        """True while a job thread is still executing (destroying it now would abort the process)."""
+        return any(t.isRunning() for t in self._threads.values())
+
     # ------------------------------------------------------------------ actions
     def enqueue(
         self, description: str, targets: list[DownloadTarget], options: DownloadOptions

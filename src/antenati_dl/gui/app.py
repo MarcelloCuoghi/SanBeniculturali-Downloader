@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import logging
+import os
 import sys
 
 
@@ -28,8 +29,18 @@ def main(argv: list[str] | None = None) -> int:
 
     window = MainWindow()
     window.show()
-    code = app.exec()
-    return int(code)
+    code = int(app.exec())
+    if window.background_work_running():
+        # Some thread did not stop within the close timeouts (slow network): destroying the window
+        # would abort the process (running QThread) or hang (thread pools wait for their tasks).
+        # Page files are written atomically, so leaving without running destructors is safe.
+        logging.getLogger(__name__).warning("Background threads still running at exit; exiting now")
+        logging.shutdown()
+        for stream in (sys.stdout, sys.stderr):
+            if stream is not None:
+                stream.flush()
+        os._exit(code)
+    return code
 
 
 if __name__ == "__main__":

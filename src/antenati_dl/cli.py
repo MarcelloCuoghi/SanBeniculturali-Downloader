@@ -64,7 +64,7 @@ from .models import (
     Serie,
 )
 from .portal import EXPLORE_URL, SEARCH_URL, Portal, parse_register_ref
-from .utils import format_bytes, parse_page_ranges
+from .utils import format_bytes, page_range_spans, parse_page_ranges
 
 log = logging.getLogger("antenati_dl")
 
@@ -155,7 +155,7 @@ def _check_page_spec(spec: str | None) -> None:
     if spec is None:
         return
     try:
-        parse_page_ranges(spec, 10**9)
+        page_range_spans(spec, 10**9)  # syntax only: never expand open ranges like "20-" here
     except ValueError:
         raise CliError(f"Invalid page selection {spec!r} (examples: 1-10,15  20-  last)") from None
 
@@ -313,6 +313,10 @@ def resolve_scope(portal: Portal, args: argparse.Namespace, build_query: bool = 
         query = SearchQuery(serie=scope.serie.id)
     elif args.localita:
         query = SearchQuery(localita=args.localita, archivio=scope.archive.id if scope.archive else None)
+        if scope.fondo is not None:  # keep the --fondo restriction (scope.archive is set with --fondo)
+            assert scope.archive is not None
+            for term in fondo_query(portal, scope.archive, scope.fondo).facets:
+                query = query.refine(term)
     elif scope.archive is not None:
         query = (
             fondo_query(portal, scope.archive, scope.fondo)

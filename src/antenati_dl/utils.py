@@ -34,9 +34,20 @@ def parse_page_ranges(spec: str | None, total: int) -> list[int]:
     * ``"-5"`` means 1..5, ``"20-"`` means 20..total, ``"last"`` the last page;
     * indices outside ``1..total`` raise :class:`ValueError`.
     """
-    if spec is None or spec.strip().lower() in ("", "all", "*", "tutte", "tutto"):
-        return list(range(1, total + 1))
     selected: set[int] = set()
+    for start, end in page_range_spans(spec, total):
+        selected.update(range(start, end + 1))
+    return sorted(selected)
+
+
+def page_range_spans(spec: str | None, total: int) -> list[tuple[int, int]]:
+    """Validate a page selection and return its ``(start, end)`` spans without expanding them.
+
+    Same rules and errors as :func:`parse_page_ranges`; cheap even for a huge ``total``.
+    """
+    if spec is None or spec.strip().lower() in ("", "all", "*", "tutte", "tutto"):
+        return [(1, total)] if total >= 1 else []
+    spans: list[tuple[int, int]] = []
     for part in spec.replace(" ", "").split(","):
         if not part:
             continue
@@ -51,10 +62,10 @@ def parse_page_ranges(spec: str | None, total: int) -> list[int]:
             start, end = end, start
         if start < 1 or end > total:
             raise ValueError(f"Page range {part!r} outside 1-{total}")
-        selected.update(range(start, end + 1))
-    if not selected:
+        spans.append((start, end))
+    if not spans:
         raise ValueError(f"Empty page selection: {spec!r}")
-    return sorted(selected)
+    return spans
 
 
 def format_bytes(num: float) -> str:

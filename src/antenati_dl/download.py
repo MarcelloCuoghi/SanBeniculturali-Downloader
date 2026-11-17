@@ -18,6 +18,7 @@ from the thread that called :meth:`Downloader.run`.
 
 from __future__ import annotations
 
+import contextlib
 import json
 import logging
 import os
@@ -134,8 +135,13 @@ class Downloader:
         if manifest.tipologia:
             parts.append(sanitize_filename(manifest.tipologia))
         title = manifest.title or "registro"
-        leaf = f"{title} ({manifest.register_id})" if manifest.register_id else title
-        parts.append(sanitize_filename(leaf, max_length=100))
+        if manifest.register_id:
+            # truncate the title, never the id: registers with the same long title prefix must not
+            # share a folder (their pages would be skipped as "already on disk")
+            suffix = f" ({manifest.register_id})"
+            parts.append(sanitize_filename(title, max_length=max(20, 100 - len(suffix))) + suffix)
+        else:
+            parts.append(sanitize_filename(title, max_length=100))
         return Path(self.options.output_dir).joinpath(*parts)
 
     def page_path(self, manifest: Manifest, page: Page) -> Path:
@@ -147,13 +153,16 @@ class Downloader:
             if not pages:
                 raise PortalError(f"Page {target.page_image_id} not found in register")
             return pages
+        # page indices follow the canvas position, so they can have gaps (canvases without images):
+        # bound the selection by the last index, not by the number of pages
+        last = max((p.index for p in manifest.pages), default=0)
         if isinstance(target.pages, list):
             wanted = set(target.pages)
-            bad = [i for i in wanted if i < 1 or i > len(manifest.pages)]
+            bad = [i for i in wanted if i < 1 or i > last]
             if bad:
-                raise ValueError(f"Pages {bad} outside 1-{len(manifest.pages)}")
+                raise ValueError(f"Pages {bad} outside 1-{last}")
         else:
-            wanted = set(parse_page_ranges(target.pages, len(manifest.pages)))
+            wanted = set(parse_page_ranges(target.pages, last))
         return [p for p in manifest.pages if p.index in wanted]
 
     def count_registers(self, targets: Iterable[DownloadTarget]) -> int:
@@ -241,6 +250,8 @@ class Downloader:
             while not self.cancelled:
                 try:
                     manifest, pages, error = next(jobs)
+                    if self.cancelled:  # cancelled while the manifest was loading: start nothing new
+                        break
                     if error is not None:
                         raise error
                 except StopIteration:
@@ -264,7 +275,9 @@ class Downloader:
                     pages = list(manifest.pages)
                 try:
                     self._download_register(pool, manifest, pages, index, register_total, report)
-                except InsufficientSpaceError as exc:
+                except (InsufficientSpaceError, OSError) as exc:
+                    # local problem (disk full, folder not writable, missing drive...): stop the job
+                    # instead of letting the exception escape run() without a report
                     report.errors.append(str(exc))
                     report.registers_failed += 1
                     self._emit(EventKind.REGISTER_FAILED, register=manifest, message=str(exc), error=str(exc))
@@ -435,8 +448,13 @@ class Downloader:
         path = self.page_path(manifest, page)
         data = self.portal.http.get_image(page.image_url(self.options.size), cancelled=lambda: self.cancelled)
         tmp = path.with_name(path.name + ".part")
-        tmp.write_bytes(data)
-        os.replace(tmp, path)
+        try:
+            tmp.write_bytes(data)
+            os.replace(tmp, path)
+        except BaseException:
+            with contextlib.suppress(OSError):  # do not leave partial files behind (e.g. disk full)
+                tmp.unlink(missing_ok=True)
+            raise
         return path, len(data)
 
     def _write_metadata(self, manifest: Manifest, directory: Path) -> None:

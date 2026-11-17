@@ -178,13 +178,19 @@ def parse_fondi(page_html: str, archive_id: int) -> list[Fondo]:
     doc = lxml_html.fromstring(page_html)
     names: dict[int, str] = {}
     for node in doc.xpath("//*[@id='archive_property']//*[@data-property]"):
+        prop = (node.get("data-property") or "").strip()
+        if not prop.isdigit():  # one odd element must not break the whole listing
+            continue
         h3 = node.find(".//h3")
-        names[int(node.get("data-property"))] = _text(h3) if h3 is not None else _text(node)
+        names[int(prop)] = _text(h3) if h3 is not None else _text(node)
     fondi: list[Fondo] = []
     seen: set[int] = set()
     toponym_xpath = "//div[contains(concat(' ', normalize-space(@class), ' '), ' property-toponym ')]"
     for block in doc.xpath(toponym_xpath):
-        fid = int(block.get("data-id"))
+        data_id = (block.get("data-id") or "").strip()
+        if not data_id.isdigit():
+            continue
+        fid = int(data_id)
         series: list[Serie] = []
         for a in block.xpath(".//a[contains(@href, 'serie=')]"):
             qs = parse_qs(urlparse(a.get("href")).query)

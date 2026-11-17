@@ -459,6 +459,8 @@ class MainWindow(QMainWindow):
         if node.kind is NodeKind.FONDO:
 
             def fondo_done(result) -> None:
+                if result is None:  # skipped: the selection changed while the task was queued
+                    return
                 query, count = result
                 node.extra["fondo_query"] = query
                 node.extra["fondo_resolved"] = True
@@ -467,15 +469,23 @@ class MainWindow(QMainWindow):
                 show_count(count, f" in {n_series} series" if n_series else "")
 
             self.runner.submit(
-                resolve_fondo_query, self.portal, node.payload, on_done=fondo_done, on_error=failed
+                self._unless_stale(gen, resolve_fondo_query),
+                self.portal,
+                node.payload,
+                on_done=fondo_done,
+                on_error=failed,
             )
         elif node.query is not None:
 
-            def count_done(count: int) -> None:
+            def count_done(count: int | None) -> None:
+                if count is None:  # skipped: the selection changed while the task was queued
+                    return
                 node.count = count
                 show_count(count)
 
-            self.runner.submit(self.portal.count, node.query, on_done=count_done, on_error=failed)
+            self.runner.submit(
+                self._unless_stale(gen, self.portal.count), node.query, on_done=count_done, on_error=failed
+            )
 
     def load_register(self, ref, title: str = "", page_image_id: str | None = None) -> None:
         self._selection_gen += 1
@@ -507,7 +517,21 @@ class MainWindow(QMainWindow):
             self.statusBar().showMessage(f"Could not load the register: {exc}", 15000)
             self._update_actions()
 
-        self.runner.submit(self.portal.manifest, ref, on_done=done, on_error=failed)
+        self.runner.submit(self._unless_stale(gen, self.portal.manifest), ref, on_done=done, on_error=failed)
+
+    def _unless_stale(self, gen: int, fn):
+        """Wrap ``fn`` so that it is skipped (returns None) if the selection changed before it started.
+
+        Scrolling through the tree with the keyboard queues one request per item: without this, the
+        pool would fetch every stale item before the one actually selected.
+        """
+
+        def call(*args, **kwargs):  # worker thread: only reads an int attribute
+            if gen != self._selection_gen:
+                return None
+            return fn(*args, **kwargs)
+
+        return call
 
     def go_to_register(self) -> None:
         text = self.go_edit.text().strip()
@@ -714,6 +738,18 @@ class MainWindow(QMainWindow):
         )
 
     # ================================================================== closing
+    def background_work_running(self) -> bool:
+        """True if a download thread or a pool task is still busy (e.g. stuck on a slow request).
+
+        Destroying the window then would abort the process ("QThread: Destroyed while thread is still
+        running") or block until the network times out: :func:`antenati_dl.gui.app.main` checks this.
+        """
+        return (
+            self.manager.threads_running()
+            or self.runner.pool.activeThreadCount() > 0
+            or self.thumbs.runner.pool.activeThreadCount() > 0
+        )
+
     def closeEvent(self, event: QCloseEvent) -> None:
         if self.manager.has_active():
             answer = QMessageBox.question(

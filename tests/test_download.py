@@ -174,6 +174,16 @@ def test_register_dir_sanitizes_and_falls_back(make_downloader, tmp_path):
     assert dl.register_dir(no_id) == tmp_path / "A" / "B" / "Reg" / "Nati" / "Reg"
 
 
+def test_register_dir_long_titles_keep_the_register_id(make_downloader):
+    long_title = "Registro degli atti di nascita della sezione " + "x" * 80
+    a = make_manifest("an_ua111", title=long_title + " A")
+    b = make_manifest("an_ua222", title=long_title + " B")
+    dl = make_downloader()
+    leaf_a, leaf_b = dl.register_dir(a).name, dl.register_dir(b).name
+    assert leaf_a != leaf_b  # used to be truncated to the same 100 characters, ids cut off
+    assert leaf_a.endswith(" (an_ua111)") and len(leaf_a) <= 100
+
+
 # --------------------------------------------------------------------------- page selection
 @pytest.mark.parametrize(
     ("pages", "expected"),
@@ -189,6 +199,23 @@ def test_register_dir_sanitizes_and_falls_back(make_downloader, tmp_path):
 def test_select_pages(make_downloader, fixture_manifest, pages, expected):
     selected = make_downloader().select_pages(fixture_manifest, DownloadTarget(register="x", pages=pages))
     assert [p.index for p in selected] == expected
+
+
+def test_select_pages_with_index_gaps(make_downloader):
+    # a canvas without images is skipped but the indices keep the canvas position: "all" and open
+    # ranges must still reach the last page (they used to be bounded by the number of pages)
+    data = manifest_json("an_ua5", pages=4)
+    data["sequences"][0]["canvases"][1]["images"] = []
+    manifest = parse_manifest(data)
+    assert [p.index for p in manifest.pages] == [1, 3, 4]
+    dl = make_downloader()
+
+    def selected(pages):
+        return [p.index for p in dl.select_pages(manifest, DownloadTarget(register=manifest, pages=pages))]
+
+    assert selected(None) == [1, 3, 4]
+    assert selected("3-") == [3, 4]
+    assert selected([4]) == [4]
 
 
 def test_select_pages_by_image_id(make_downloader, fixture_manifest):
@@ -488,6 +515,28 @@ def test_cancel_before_start(make_downloader, fixture_manifest, recorder):
     assert recorder.kinds == [EventKind.CANCELLED, EventKind.FINISHED]
 
 
+@responses.activate
+def test_cancel_while_loading_manifest_starts_nothing(make_downloader, tmp_path, recorder):
+    # the cancel arrives while the next register's manifest is being fetched: its folder and
+    # register.json must not be created and no REGISTER_START emitted
+    mock_registers([(1001, 3)])
+    server = ImageServer()
+    cancel = threading.Event()
+    dl = make_downloader(cancel_event=cancel)
+    real_manifest = dl.portal.manifest
+
+    def manifest_then_cancel(ref):
+        result = real_manifest(ref)
+        cancel.set()
+        return result
+
+    dl.portal.manifest = manifest_then_cancel
+    report = dl.run([DownloadTarget.from_ref("an_ua1001")])
+    assert report.cancelled
+    assert recorder.kinds == [EventKind.CANCELLED, EventKind.FINISHED]
+    assert server.urls == [] and list(tmp_path.iterdir()) == []
+
+
 # --------------------------------------------------------------------------- disk space
 DiskUsage = namedtuple("DiskUsage", "total used free")
 
@@ -540,6 +589,43 @@ def test_disk_space_check_disabled_or_nothing_to_do(make_downloader, fixture_man
         make_downloader(check_disk_space=True).run([DownloadTarget(register=fixture_manifest, pages="1")]).ok
     )
     assert calls == []
+
+
+@responses.activate
+def test_unwritable_output_dir_fails_cleanly(portal, tmp_path, fixture_manifest, recorder):
+    # an OSError while preparing the register folder used to escape run() (traceback in the CLI,
+    # no report, no FINISHED event)
+    blocker = tmp_path / "not-a-dir"
+    blocker.write_text("x")
+    server = ImageServer()
+    dl = Downloader(
+        portal,
+        DownloadOptions(output_dir=blocker / "out", check_disk_space=False),
+        on_event=recorder,
+    )
+    report = dl.run([DownloadTarget(register=fixture_manifest), DownloadTarget(register=make_manifest())])
+    assert report.registers_failed == 1 and not report.ok
+    assert report.errors
+    assert recorder.kinds == [EventKind.REGISTER_FAILED, EventKind.FINISHED]  # job stopped
+    assert server.urls == []
+
+
+@responses.activate
+def test_failed_write_leaves_no_part_file(make_downloader, fixture_manifest, tmp_path, monkeypatch):
+    ImageServer()
+    real_write = Path.write_bytes
+
+    def short_write(self, data):
+        if self.name.endswith(".part"):
+            real_write(self, data[:10])
+            raise OSError(28, "No space left on device")
+        return real_write(self, data)
+
+    monkeypatch.setattr(Path, "write_bytes", short_write)
+    report = make_downloader().run([DownloadTarget(register=fixture_manifest, pages="1-2")])
+    assert report.pages_failed == 2 and report.pages_downloaded == 0
+    folder = tmp_path / FIXTURE_DIR
+    assert not list(folder.glob("*.part")) and not list(folder.glob("*.jpg"))
 
 
 # --------------------------------------------------------------------------- metadata & pdf

@@ -6,6 +6,7 @@ from antenati_dl.utils import (
     AVERAGE_PAGE_BYTES,
     estimate_page_bytes,
     format_bytes,
+    page_range_spans,
     parse_page_ranges,
     sanitize_filename,
 )
@@ -87,6 +88,18 @@ def test_parse_page_ranges(spec, expected):
 def test_parse_page_ranges_invalid(spec):
     with pytest.raises(ValueError):
         parse_page_ranges(spec, 10)
+
+
+def test_page_range_spans_does_not_expand_open_ranges():
+    # the CLI validates --pages against a huge total before knowing the register size:
+    # an open range like "20-" must not be materialised (it used to build a 10**9-element set)
+    huge = 10**12
+    assert page_range_spans("20-", huge) == [(20, huge)]
+    assert page_range_spans("1-3,last", huge) == [(1, 3), (huge, huge)]
+    assert page_range_spans(None, 5) == [(1, 5)]
+    for spec in ["0", "1-x", ","]:
+        with pytest.raises(ValueError):
+            page_range_spans(spec, huge)
 
 
 # --------------------------------------------------------------------------- format_bytes

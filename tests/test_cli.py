@@ -177,6 +177,17 @@ def test_browse_serie_by_name_needs_archive(portal: FakePortal, capsys: pytest.C
     assert code == 0 and portal.queries[0].serie == 37842016
 
 
+def test_localita_keeps_the_fondo_restriction(portal: FakePortal, capsys: pytest.CaptureFixture[str]) -> None:
+    # --fondo used to be silently dropped when --localita was given (bulk download of every fondo)
+    code, out = run(
+        capsys, "browse", "--archive", "145", "--fondo", "Stato civile italiano", "--localita", "Acquaro"
+    )
+    assert code == 0, out
+    query = portal.queries[-1]
+    assert query.localita == "Acquaro" and query.archivio == 145
+    assert any(f.startswith("primo_livello_label_s:") for f in query.facets)
+
+
 def test_search(portal: FakePortal, capsys: pytest.CaptureFixture[str]) -> None:
     code, out = run(capsys, "search", "--serie", "37842016", "--sort", "oldest", "--size", "20")
     assert code == 0
@@ -218,6 +229,24 @@ def test_download_rejects_bad_page_selection(portal: FakePortal, capsys: pytest.
     assert code == 2 and "Invalid page selection" in out
     code, out = run(capsys, "download", "an_ua37845354", "--pages", "50-60")
     assert code == 2 and "outside" in out
+
+
+def test_download_open_ended_page_range(portal: FakePortal, capsys: pytest.CaptureFixture[str]) -> None:
+    # "20-" is the documented syntax; validating it must not expand 20..10**9 in memory
+    code, out = run(capsys, "download", "an_ua37845354", "--pages", "50-", "--dry-run")
+    assert code == 0, out
+    assert "6/55" in out
+
+
+def test_download_to_unusable_folder_is_reported_not_a_traceback(
+    portal: FakePortal, capsys: pytest.CaptureFixture[str], tmp_path: Path
+) -> None:
+    blocker = tmp_path / "file"
+    blocker.write_text("x")
+    code, out = run(capsys, "download", "an_ua37845354", "--pages", "1", "-o", str(blocker / "out"))
+    assert code == cli.EXIT_FAILED, out
+    assert "Traceback" not in out and "Registers failed" in out
+    assert not portal.http.images
 
 
 def test_bulk_download_requires_a_filter(portal: FakePortal, capsys: pytest.CaptureFixture[str]) -> None:
